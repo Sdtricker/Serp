@@ -1,17 +1,21 @@
+
 # main.py
+from flask import Flask, request
 import requests
 from bs4 import BeautifulSoup
-import json
+
+app = Flask(__name__)
 
 HEADERS = {
     "User-Agent": "Mozilla/5.0 (Linux; Android 10) Chrome/124.0.0.0 Mobile Safari/537.36",
     "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
     "Accept-Language": "en-US,en;q=0.9",
-    "Accept-Encoding": "gzip, deflate",  # no br
+    "Accept-Encoding": "gzip, deflate",
     "Referer": "https://search.brave.com/",
 }
 
 URL = "https://search.brave.com/search"
+
 
 def fetch_page(query, offset, seen):
     params = {
@@ -23,7 +27,8 @@ def fetch_page(query, offset, seen):
     try:
         r = requests.get(URL, headers=HEADERS, params=params, timeout=20)
         r.raise_for_status()
-    except Exception:
+    except Exception as e:
+        print(f"[ERROR] Fetch failed: {e}")
         return []
 
     soup = BeautifulSoup(r.text, "html.parser")
@@ -48,7 +53,8 @@ def fetch_page(query, offset, seen):
     return results
 
 
-def handler(request):
+@app.route('/', methods=['GET'])
+def search():
     query = request.args.get("query", "").strip()
 
     if not query:
@@ -56,14 +62,16 @@ def handler(request):
         <h2>❌ Error: Missing ?query= parameter</h2>
         <p>Example: <code>?query=how+to+bake+a+cake</code></p>
         <hr>
-        <a href="https://t.me/NGYT777GGG" target="_blank">
-            <h3>💬 Made by @NGYT777GGG (Click to Join Telegram)</h3>
+        <center>
+        <a href="https://t.me/NGYT777GGG" target="_blank" style="font-size:20px; color:#ff5722; text-decoration:none;">
+            💬 Made by @NGYT777GGG (Click to Join Telegram)
         </a>
-        """, 400, {"Content-Type": "text/html; charset=utf-8"}
+        </center>
+        """, 400
 
     seen = set()
     all_results = []
-    max_pages = 3  # Always first 3 pages
+    max_pages = 3
     offset = 0
 
     for page in range(1, max_pages + 1):
@@ -73,65 +81,55 @@ def handler(request):
         all_results.extend(page_results)
         offset += 10
 
-    # Build HTML Response
-    html = f"""
-    <!DOCTYPE html>
-    <html>
-    <head>
-        <title>🦁 Brave Search Results for "{query}"</title>
-        <meta name="viewport" content="width=device-width, initial-scale=1">
-        <style>
-            body {{ font-family: Arial, sans-serif; margin: 30px; background: #f9f9f9; }}
-            .result {{ margin-bottom: 25px; }}
-            .title {{ font-size: 18px; color: #1a0dab; text-decoration: none; font-weight: bold; }}
-            .link {{ color: #006621; word-break: break-all; }}
-            hr {{ margin: 30px 0; }}
-            footer {{ margin-top: 40px; padding: 20px; background: #eee; border-radius: 8px; text-align: center; }}
-            footer a {{ color: #ff5722; font-weight: bold; font-size: 18px; }}
-        </style>
-    </head>
-    <body>
-        <h1>🦁 Brave Search Results</h1>
-        <p><strong>Query:</strong> {query}</p>
-        <p><strong>Total Results:</strong> {len(all_results)}</p>
-        <hr>
-    """
+    # Start building HTML response
+    html_parts = [
+        """
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <title>🦁 Brave Search Results</title>
+            <meta name="viewport" content="width=device-width, initial-scale=1">
+            <style>
+                body { font-family: Arial, sans-serif; margin: 20px; background: #f5f5f5; }
+                .result { margin: 20px 0; padding: 15px; background: white; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+                .title { font-size: 18px; color: #1a0dab; text-decoration: none; font-weight: bold; display: block; margin-bottom: 5px; }
+                .link { color: #006621; word-break: break-all; font-size: 14px; }
+                hr { margin: 30px 0; border: none; border-top: 1px solid #ddd; }
+                footer { margin-top: 40px; padding: 20px; background: #eee; border-radius: 8px; text-align: center; }
+                footer a { color: #ff5722; font-weight: bold; font-size: 18px; text-decoration: none; }
+                footer a:hover { text-decoration: underline; }
+            </style>
+        </head>
+        <body>
+            <h1>🦁 Brave Search Results for "<i>{}</i>"</h1>
+            <p><strong>✅ Showing first 3 pages | Total Results: {}</strong></p>
+            <hr>
+        """.format(query, len(all_results))
+    ]
 
     for i, (title, link) in enumerate(all_results, 1):
-        html += f"""
+        html_parts.append(f"""
         <div class="result">
-            <div><strong>{i}.</strong> <a href="{link}" class="title" target="_blank">{title}</a></div>
+            <a href="{link}" class="title" target="_blank">{i}. {title}</a>
             <div class="link">🔗 {link}</div>
         </div>
-        """
+        """)
 
-    # FOOTER WITH CLICKABLE MADE BY
-    html += f"""
+    html_parts.append("""
         <hr>
         <footer>
             <a href="https://t.me/NGYT777GGG" target="_blank">
                 💬 Made by @NGYT777GGG (Click to Join on Telegram)
             </a>
         </footer>
-    </body>
-    </html>
-    """
+        </body>
+        </html>
+    """)
 
-    return html, 200, {"Content-Type": "text/html; charset=utf-8"}
+    full_html = "\n".join(html_parts)
 
-
-# Vercel entry point
-def handler_wrapper(request):
-    from flask import Flask, request as flask_request
-
-    app = Flask(__name__)
-
-    @app.route('/', methods=['GET'])
-    def serve():
-        return handler(flask_request)
-
-    return app
+    return full_html, 200, {"Content-Type": "text/html; charset=utf-8"}
 
 
-# This is required for Vercel serverless function
-app = handler_wrapper(None)
+# Required for Vercel — must export `app`
+# No need to call anything else — Vercel auto-detects `app`
